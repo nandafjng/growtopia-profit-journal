@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Growtopia Profit Journal</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/recharts@2.5.0/dist/Recharts.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState } = React;
+        const { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } = Recharts;
+        
+        // Lucide icons as components
+        const Icon = ({ name, ...props }) => {
+            const IconComponent = lucide[name];
+            if (!IconComponent) return null;
+            return React.createElement(IconComponent, props);
+        };
+
+        const GrowtopiaJournal = () => {
+            const [entries, setEntries] = useState(() => {
+                const saved = localStorage.getItem('growtopiaEntries');
+                return saved ? JSON.parse(saved) : [];
+            });
+            const [darkMode, setDarkMode] = useState(false);
+            const [showAddForm, setShowAddForm] = useState(false);
+            const [viewMode, setViewMode] = useState('daily');
+            const [activeSession, setActiveSession] = useState(() => {
+                const saved = localStorage.getItem('growtopiaSession');
+                return saved ? JSON.parse(saved) : null;
+            });
+            const [showSessionForm, setShowSessionForm] = useState(false);
+            
+            const [formData, setFormData] = useState({
+                activityType: 'Science Station',
+                amount: '',
+                notes: '',
+                timestamp: new Date().toISOString().slice(0, 16)
+            });
+
+            const [sessionData, setSessionData] = useState({
+                startGems: '',
+                endGems: '',
+                accounts: 15,
+                startTime: '',
+                endTime: '',
+                notes: ''
+            });
+
+            const activityTypes = [
+                'Science Station',
+                'Broccoli Harvest',
+                'Tree Harvest (Gems)',
+                'Tree Harvest (DL)'
+            ];
+
+            const COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
+
+            React.useEffect(() => {
+                localStorage.setItem('growtopiaEntries', JSON.stringify(entries));
+            }, [entries]);
+
+            React.useEffect(() => {
+                localStorage.setItem('growtopiaSession', JSON.stringify(activeSession));
+            }, [activeSession]);
+
+            const handleAddEntry = () => {
+                if (!formData.amount) return;
+                
+                const newEntry = {
+                    id: Date.now(),
+                    activityType: formData.activityType,
+                    amount: parseFloat(formData.amount),
+                    notes: formData.notes,
+                    timestamp: new Date(formData.timestamp).getTime()
+                };
+                
+                setEntries([newEntry, ...entries]);
+                setFormData({
+                    activityType: 'Science Station',
+                    amount: '',
+                    notes: '',
+                    timestamp: new Date().toISOString().slice(0, 16)
+                });
+                setShowAddForm(false);
+            };
+
+            const startSession = () => {
+                if (!sessionData.startGems || !sessionData.startTime) return;
+                
+                const session = {
+                    startGems: parseFloat(sessionData.startGems),
+                    accounts: parseInt(sessionData.accounts),
+                    startTime: new Date(sessionData.startTime).getTime(),
+                    notes: sessionData.notes
+                };
+                
+                setActiveSession(session);
+                setSessionData({
+                    startGems: '',
+                    endGems: '',
+                    accounts: 15,
+                    startTime: '',
+                    endTime: '',
+                    notes: ''
+                });
+                setShowSessionForm(false);
+            };
+
+            const endSession = () => {
+                if (!sessionData.endGems || !sessionData.endTime || !activeSession) return;
+                
+                const endGems = parseFloat(sessionData.endGems);
+                const endTime = new Date(sessionData.endTime).getTime();
+                const profit = endGems - activeSession.startGems;
+                const duration = (endTime - activeSession.startTime) / (1000 * 60 * 60);
+                
+                const newEntry = {
+                    id: Date.now(),
+                    activityType: 'Gems Breaking',
+                    amount: profit,
+                    accounts: activeSession.accounts,
+                    startGems: activeSession.startGems,
+                    endGems: endGems,
+                    startTime: activeSession.startTime,
+                    endTime: endTime,
+                    duration: duration,
+                    notes: activeSession.notes,
+                    timestamp: endTime
+                };
+                
+                setEntries([newEntry, ...entries]);
+                setActiveSession(null);
+                setSessionData({
+                    startGems: '',
+                    endGems: '',
+                    accounts: 15,
+                    startTime: '',
+                    endTime: '',
+                    notes: ''
+                });
+                setShowSessionForm(false);
+            };
+
+            const cancelSession = () => {
+                setActiveSession(null);
+                setSessionData({
+                    startGems: '',
+                    endGems: '',
+                    accounts: 15,
+                    startTime: '',
+                    endTime: '',
+                    notes: ''
+                });
+                setShowSessionForm(false);
+            };
+
+            const deleteEntry = (id) => {
+                setEntries(entries.filter(e => e.id !== id));
+            };
+
+            const getStats = () => {
+                const now = Date.now();
+                const dayMs = 24 * 60 * 60 * 1000;
+                
+                const dailyEntries = entries.filter(e => now - e.timestamp < dayMs);
+                const weeklyEntries = entries.filter(e => now - e.timestamp < 7 * dayMs);
+                const monthlyEntries = entries.filter(e => now - e.timestamp < 30 * dayMs);
+                
+                const dailyProfit = dailyEntries.reduce((sum, e) => sum + e.amount, 0);
+                const weeklyProfit = weeklyEntries.reduce((sum, e) => sum + e.amount, 0);
+                const monthlyProfit = monthlyEntries.reduce((sum, e) => sum + e.amount, 0);
+                
+                const activityBreakdown = {};
+                entries.forEach(e => {
+                    activityBreakdown[e.activityType] = (activityBreakdown[e.activityType] || 0) + e.amount;
+                });
+                
+                const bestActivity = Object.entries(activityBreakdown).sort((a, b) => b[1] - a[1])[0];
+                
+                const gemsBreakingEntries = entries.filter(e => e.activityType === 'Gems Breaking');
+                const avgPerAccount = gemsBreakingEntries.length > 0
+                    ? gemsBreakingEntries.reduce((sum, e) => sum + e.amount / e.accounts, 0) / gemsBreakingEntries.length
+                    : 0;
+                
+                return {
+                    dailyProfit,
+                    weeklyProfit,
+                    monthlyProfit,
+                    bestActivity: bestActivity ? bestActivity[0] : 'N/A',
+                    activityBreakdown,
+                    avgPerAccount
+                };
+            };
+
+            const getChartData = () => {
+                const now = Date.now();
+                const dayMs = 24 * 60 * 60 * 1000;
+                
+                let days = viewMode === 'daily' ? 7 : viewMode === 'weekly' ? 4 : 12;
+                let period = viewMode === 'daily' ? dayMs : viewMode === 'weekly' ? 7 * dayMs : 30 * dayMs;
+                
+                const chartData = [];
+                for (let i = days - 1; i >= 0; i--) {
+                    const periodStart = now - (i + 1) * period;
+                    const periodEnd = now - i * period;
+                    
+                    const periodEntries = entries.filter(e => e.timestamp >= periodStart && e.timestamp < periodEnd);
+                    const total = periodEntries.reduce((sum, e) => sum + e.amount, 0);
+                    
+                    let label;
+                    if (viewMode === 'daily') {
+                        label = new Date(periodEnd).toLocaleDateString('en-US', { weekday: 'short' });
+                    } else if (viewMode === 'weekly') {
+                        label = 'Week ' + (days - i);
+                    } else {
+                        label = new Date(periodEnd).toLocaleDateString('en-US', { month: 'short' });
+                    }
+                    
+                    chartData.push({ name: label, profit: total });
+                }
+                
+                return chartData;
+            };
+
+            const getPieData = () => {
+                const stats = getStats();
+                return Object.entries(stats.activityBreakdown).map(([name, value]) => ({
+                    name,
+                    value
+                }));
+            };
+
+            const getActivityComparisonData = () => {
+                const stats = getStats();
+                return Object.entries(stats.activityBreakdown).map(([name, value]) => ({
+                    name: name,
+                    profit: value
+                }));
+            };
+
+            const exportData = () => {
+                const dataStr = JSON.stringify({ entries, activeSession }, null, 2);
+                const dataBlob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(dataBlob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'growtopia-journal-' + new Date().toISOString().slice(0, 10) + '.json';
+                link.click();
+            };
+
+            const importData = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const data = JSON.parse(event.target.result);
+                        setEntries(data.entries || []);
+                        setActiveSession(data.activeSession || null);
+                    } catch (err) {
+                        alert('Error importing data');
+                    }
+                };
+                reader.readAsText(file);
+            };
+
+            const formatDuration = (hours) => {
+                const h = Math.floor(hours);
+                const m = Math.round((hours - h) * 60);
+                return h + 'h ' + m + 'm';
+            };
+
+            const stats = getStats();
+            const bgClass = darkMode ? 'bg-gray-900 text-white' : 'bg-gradient-to-br from-blue-50 to-purple-50 text-gray-900';
+            const cardClass = darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200';
+            const inputClass = darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300';
+
+            return (
+                <div className={'min-h-screen ' + bgClass + ' transition-colors duration-300'}>
+                    <div className={cardClass + ' border-b sticky top-0 z-10 shadow-lg'}>
+                        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center flex-wrap gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg flex items-center justify-center">
+                                    <Icon name="TrendingUp" className="w-6 h-6 text-white" />
+                                </div>
+                                <div>
+                                    <h1 className="text-2xl font-bold">Growtopia Profit Journal</h1>
+                                    <p className="text-sm opacity-70">Track your farming empire</p>
+                                </div>
+                            </div>
+                            <div className="flex gap-2 flex-wrap">
+                                <button
+                                    onClick={() => setDarkMode(!darkMode)}
+                                    className={cardClass + ' p-2 rounded-lg border hover:scale-105 transition-transform'}
+                                >
+                                    <Icon name={darkMode ? "Sun" : "Moon"} className="w-5 h-5" />
+                                </button>
+                                <button
+                                    onClick={exportData}
+                                    className={cardClass + ' p-2 rounded-lg border hover:scale-105 transition-transform'}
+                                >
+                                    <Icon name="Download" className="w-5 h-5" />
+                                </button>
+                                <label className={cardClass + ' p-2 rounded-lg border hover:scale-105 transition-transform cursor-pointer'}>
+                                    <Icon name="Upload" className="w-5 h-5" />
+                                    <input type="file" onChange={importData} className="hidden" accept=".json" />
+                                </label>
+                                {activeSession ? (
+                                    <button
+                                        onClick={() => setShowSessionForm(true)}
+                                        className="px-4 py-2 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-lg hover:scale-105 transition-transform flex items-center gap-2"
+                                    >
+                                        <Icon name="StopCircle" className="w-5 h-5" />
+                                        End Session
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() => setShowSessionForm(true)}
+                                        className="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:scale-105 transition-transform flex items-center gap-2"
+                                    >
+                                        <Icon name="Play" className="w-5 h-5" />
+                                        Start Breaking
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => setShowAddForm(true)}
+                                    className="px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:scale-105 transition-transform flex items-center gap-2"
+                                >
+                                    <Icon name="PlusCircle" className="w-5 h-5" />
+                                    Add Entry
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="max-w-7xl mx-auto px-4 py-6">
+                        {activeSession && (
+                            <div className={cardClass + ' border-2 border-orange-500 rounded-xl p-6 mb-6 shadow-lg'}>
+                                <div className="flex items-center justify-between flex-wrap gap-4">
+                                    <div className="flex items-center gap-3">
+                                        <Icon name="Clock" className="w-8 h-8 text-orange-500" />
+                                        <div>
+                                            <label className="block text-sm font-medium mb-1">Notes (optional)</label>
+                                            <textarea
+                                                value={sessionData.notes}
+                                                onChange={(e) => setSessionData({...sessionData, notes: e.target.value})}
+                                                className={'w-full px-3 py-2 border rounded-lg ' + inputClass}
+                                                rows="2"
+                                                placeholder="e.g., Breaking chandelier blocks"
+                                            />
+                                        </div>
+
+                                        <button
+                                            onClick={startSession}
+                                            className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg font-semibold hover:scale-105 transition-transform"
+                                        >
+                                            Start Session
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        <div className={(darkMode ? 'bg-gray-700' : 'bg-blue-50') + ' rounded-lg p-4 mb-4'}>
+                                            <div className="text-sm opacity-70 mb-2">Current Session</div>
+                                            <div className="space-y-1 text-sm">
+                                                <div>Started: {new Date(activeSession.startTime).toLocaleString()}</div>
+                                                <div>Starting Gems: {activeSession.startGems.toLocaleString()}</div>
+                                                <div>Accounts: {activeSession.accounts}</div>
+                                                {activeSession.notes && <div>Notes: {activeSession.notes}</div>}
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium mb-1">Ending Gems</label>
+                                            <input
+                                                type="number"
+                                                value={sessionData.endGems}
+                                                onChange={(e) => setSessionData({...sessionData, endGems: e.target.value})}
+                                                className={'w-full px-3 py-2 border rounded-lg ' + inputClass}
+                                                placeholder="e.g., 180000"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium mb-1">End Time</label>
+                                            <input
+                                                type="datetime-local"
+                                                value={sessionData.endTime}
+                                                onChange={(e) => setSessionData({...sessionData, endTime: e.target.value})}
+                                                className={'w-full px-3 py-2 border rounded-lg ' + inputClass}
+                                            />
+                                        </div>
+
+                                        {sessionData.endGems && sessionData.endTime && activeSession && (
+                                            <div className={(darkMode ? 'bg-green-900' : 'bg-green-50') + ' rounded-lg p-4'}>
+                                                <div className="text-sm opacity-70 mb-1">Profit Preview</div>
+                                                <div className="text-3xl font-bold text-green-500">
+                                                    +{(parseFloat(sessionData.endGems) - activeSession.startGems).toLocaleString()} gems
+                                                </div>
+                                                <div className="text-sm opacity-70 mt-1">
+                                                    Duration: {formatDuration((new Date(sessionData.endTime).getTime() - activeSession.startTime) / (1000 * 60 * 60))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={cancelSession}
+                                                className="flex-1 py-3 bg-gray-500 text-white rounded-lg font-semibold hover:scale-105 transition-transform"
+                                            >
+                                                Cancel Session
+                                            </button>
+                                            <button
+                                                onClick={endSession}
+                                                className="flex-1 py-3 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-lg font-semibold hover:scale-105 transition-transform"
+                                            >
+                                                End Session
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        ReactDOM.render(<GrowtopiaJournal />, document.getElementById('root'));
+    </script>
+</body>
+</html>
+                                            <h3 className="text-xl font-bold text-orange-500">Gems Breaking Session Active</h3>
+                                            <p className="text-sm opacity-70">
+                                                Started: {new Date(activeSession.startTime).toLocaleString()}
+                                            </p>
+                                            <p className="text-sm opacity-70">
+                                                Starting Gems: {activeSession.startGems.toLocaleString()} • Accounts: {activeSession.accounts}
+                                            </p>
+                                            {activeSession.notes && (
+                                                <p className="text-sm opacity-60 mt-1">Note: {activeSession.notes}</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => setShowSessionForm(true)}
+                                        className="px-6 py-3 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-lg hover:scale-105 transition-transform font-semibold"
+                                    >
+                                        End Session
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                            <div className={cardClass + ' border rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow'}>
+                                <div className="flex justify-between items-start mb-2">
+                                    <div className="text-sm opacity-70">Today Profit</div>
+                                    <Icon name="Calendar" className="w-5 h-5 text-green-500" />
+                                </div>
+                                <div className="text-3xl font-bold text-green-500">{stats.dailyProfit.toLocaleString()}</div>
+                                <div className="text-xs opacity-60 mt-1">Gems earned today</div>
+                            </div>
+
+                            <div className={cardClass + ' border rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow'}>
+                                <div className="flex justify-between items-start mb-2">
+                                    <div className="text-sm opacity-70">Weekly Profit</div>
+                                    <Icon name="TrendingUp" className="w-5 h-5 text-blue-500" />
+                                </div>
+                                <div className="text-3xl font-bold text-blue-500">{stats.weeklyProfit.toLocaleString()}</div>
+                                <div className="text-xs opacity-60 mt-1">Last 7 days</div>
+                            </div>
+
+                            <div className={cardClass + ' border rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow'}>
+                                <div className="flex justify-between items-start mb-2">
+                                    <div className="text-sm opacity-70">Monthly Profit</div>
+                                    <Icon name="BarChart3" className="w-5 h-5 text-purple-500" />
+                                </div>
+                                <div className="text-3xl font-bold text-purple-500">{stats.monthlyProfit.toLocaleString()}</div>
+                                <div className="text-xs opacity-60 mt-1">Last 30 days</div>
+                            </div>
+
+                            <div className={cardClass + ' border rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow'}>
+                                <div className="flex justify-between items-start mb-2">
+                                    <div className="text-sm opacity-70">Avg Per Account</div>
+                                    <Icon name="Award" className="w-5 h-5 text-orange-500" />
+                                </div>
+                                <div className="text-2xl font-bold text-orange-500">{stats.avgPerAccount.toFixed(0)}</div>
+                                <div className="text-xs opacity-60 mt-1">Gems per account</div>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-center gap-2 mb-6 flex-wrap">
+                            {['daily', 'weekly', 'monthly'].map(mode => (
+                                <button
+                                    key={mode}
+                                    onClick={() => setViewMode(mode)}
+                                    className={'px-6 py-2 rounded-lg font-medium transition-all ' + (viewMode === mode ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white' : cardClass + ' border hover:scale-105')}
+                                >
+                                    {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="text-center py-8">
+                            <p className="text-lg font-semibold mb-2">Charts coming soon!</p>
+                            <p className="text-sm opacity-70">The standalone HTML version has limited chart support.</p>
+                            <p className="text-sm opacity-70">For full charts, use the React version in Claude.</p>
+                        </div>
+
+                        <div className={cardClass + ' border rounded-xl p-6 shadow-lg'}>
+                            <h3 className="text-lg font-bold mb-4">Recent Entries</h3>
+                            <div className="space-y-3">
+                                {entries.length === 0 ? (
+                                    <div className="text-center py-8 opacity-60">
+                                        No entries yet. Start a breaking session or add manual entries!
+                                    </div>
+                                ) : (
+                                    entries.slice(0, 15).map(entry => (
+                                        <div key={entry.id} className={(darkMode ? 'bg-gray-700' : 'bg-gray-50') + ' rounded-lg p-4'}>
+                                            <div className="flex justify-between items-start gap-4">
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className="font-semibold text-lg">{entry.activityType}</span>
+                                                        {entry.activityType === 'Gems Breaking' && (
+                                                            <span className="px-2 py-1 bg-purple-500 text-white text-xs rounded-full">
+                                                                {entry.accounts} accounts
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    {entry.activityType === 'Gems Breaking' ? (
+                                                        <div className="text-sm opacity-70 mt-1 space-y-1">
+                                                            <div>Started: {new Date(entry.startTime).toLocaleString()}</div>
+                                                            <div>Ended: {new Date(entry.endTime).toLocaleString()}</div>
+                                                            <div>
+                                                                Duration: {formatDuration(entry.duration)} • Start: {entry.startGems.toLocaleString()} → End: {entry.endGems.toLocaleString()}
+                                                            </div>
+                                                            <div>Gems per hour: {(entry.amount / entry.duration).toFixed(0)}</div>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-sm opacity-70 mt-1">
+                                                            {new Date(entry.timestamp).toLocaleString()}
+                                                        </div>
+                                                    )}
+                                                    
+                                                    {entry.notes && (
+                                                        <div className="text-sm opacity-60 mt-2 italic">{entry.notes}</div>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="text-right">
+                                                        <div className="text-2xl font-bold text-green-500">
+                                                            +{entry.amount.toLocaleString()}
+                                                        </div>
+                                                        <div className="text-xs opacity-60">gems</div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => deleteEntry(entry.id)}
+                                                        className="p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-900 rounded-lg transition-colors"
+                                                    >
+                                                        <Icon name="Trash2" className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {showAddForm && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                            <div className={cardClass + ' border rounded-xl p-6 max-w-md w-full shadow-2xl max-h-screen overflow-y-auto'}>
+                                <div className="flex justify-between items-center mb-4">
+                                    <h2 className="text-xl font-bold">Add Manual Entry</h2>
+                                    <button onClick={() => setShowAddForm(false)} className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded">
+                                        <Icon name="X" className="w-6 h-6" />
+                                    </button>
+                                </div>
+                                
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">Activity Type</label>
+                                        <select
+                                            value={formData.activityType}
+                                            onChange={(e) => setFormData({...formData, activityType: e.target.value})}
+                                            className={'w-full px-3 py-2 border rounded-lg ' + inputClass}
+                                        >
+                                            {activityTypes.map(type => (
+                                                <option key={type} value={type}>{type}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">Amount (Gems or DL)</label>
+                                        <input
+                                            type="number"
+                                            value={formData.amount}
+                                            onChange={(e) => setFormData({...formData, amount: e.target.value})}
+                                            className={'w-full px-3 py-2 border rounded-lg ' + inputClass}
+                                            placeholder="Enter profit amount"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">Date and Time</label>
+                                        <input
+                                            type="datetime-local"
+                                            value={formData.timestamp}
+                                            onChange={(e) => setFormData({...formData, timestamp: e.target.value})}
+                                            className={'w-full px-3 py-2 border rounded-lg ' + inputClass}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">Notes (optional)</label>
+                                        <textarea
+                                            value={formData.notes}
+                                            onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                                            className={'w-full px-3 py-2 border rounded-lg ' + inputClass}
+                                            rows="2"
+                                            placeholder="Any additional notes..."
+                                        />
+                                    </div>
+
+                                    <button
+                                        onClick={handleAddEntry}
+                                        className="w-full py-3 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg font-semibold hover:scale-105 transition-transform"
+                                    >
+                                        Add Entry
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {showSessionForm && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                            <div className={cardClass + ' border rounded-xl p-6 max-w-md w-full shadow-2xl max-h-screen overflow-y-auto'}>
+                                <div className="flex justify-between items-center mb-4">
+                                    <h2 className="text-xl font-bold">
+                                        {activeSession ? 'End Breaking Session' : 'Start Breaking Session'}
+                                    </h2>
+                                    <button onClick={() => setShowSessionForm(false)} className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded">
+                                        <Icon name="X" className="w-6 h-6" />
+                                    </button>
+                                </div>
+                                
+                                {!activeSession ? (
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium mb-1">Starting Gems</label>
+                                            <input
+                                                type="number"
+                                                value={sessionData.startGems}
+                                                onChange={(e) => setSessionData({...sessionData, startGems: e.target.value})}
+                                                className={'w-full px-3 py-2 border rounded-lg ' + inputClass}
+                                                placeholder="e.g., 150000"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium mb-1">Number of Accounts</label>
+                                            <input
+                                                type="number"
+                                                value={sessionData.accounts}
+                                                onChange={(e) => setSessionData({...sessionData, accounts: e.target.value})}
+                                                className={'w-full px-3 py-2 border rounded-lg ' + inputClass}
+                                                placeholder="15"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium mb-1">Start Time</label>
+                                            <input
+                                                type="datetime-local"
+                                                value={sessionData.startTime}
+                                                onChange={(e) => setSessionData({...sessionData, startTime: e.target.value})}
+                                                className={'w-full px-3 py-2 border rounded-lg ' + inputClass}
+                                            />
+                                        </div>
+
+                                        <div>
